@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>幸福食堂手機掃碼點餐練習</title>
+<style>
+/* ===== 基本設定：配色與字體 ===== */
+:root{--bg:#f6f1e7;--card:#fffdf8;--orange:#c8693a;--orange-d:#a3502a;--green:#dfe9d6;--green-d:#4f6b45;--text:#3a2f27;--line:#e2d8c6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;font-size:18px;line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:16px 16px 120px}
+h1,h2{margin:0}
+/* 按鈕：字體 20px、點擊範圍大 */
+button{font-family:inherit;font-size:20px;font-weight:700;min-height:56px;padding:10px 22px;border-radius:14px;border:3px solid var(--orange);background:var(--orange);color:#fff;cursor:pointer}
+button:hover{background:var(--orange-d)}
+button:focus-visible{outline:4px solid #2f5d8a;outline-offset:3px}
+button.ghost{background:#fff;color:var(--orange-d)}
+button.ghost:hover{background:#fbeee4}
+.screen{display:none}.screen.on{display:block}
+/* ===== 進度提示 ===== */
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 16px}
+.steps span{flex:1;min-width:120px;text-align:center;padding:8px 4px;border-radius:12px;background:#fff;border:2px solid var(--line);font-weight:700}
+.steps span.now{background:var(--green);border-color:var(--green-d);color:#2f4528}
+.steps span.now::after{content:"（目前在這裡）";display:block;font-size:16px;font-weight:400}
+/* ===== 歡迎頁 ===== */
+.welcome{text-align:center;padding:40px 12px}
+.welcome svg{width:160px;height:160px}
+.welcome h1{font-size:44px;margin:12px 0}
+.welcome p{font-size:22px}
+.welcome button{font-size:26px;min-height:72px;padding:12px 48px;margin-top:16px}
+/* ===== 菜單 ===== */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.tabs button{background:#fff;color:var(--orange-d);padding:10px 4px}
+.tabs button.on{background:var(--orange);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.dish{background:var(--card);border:2px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column}
+.pic{position:relative;aspect-ratio:4/3}
+.pic img,.pic .fb{position:absolute;inset:0;width:100%;height:100%}
+.pic img{object-fit:cover;z-index:2}
+.fb{display:flex;align-items:center;justify-content:center;font-size:84px}
+.dish .info{padding:12px 14px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+.dish h2{font-size:24px}
+.price{font-size:24px;font-weight:700;color:var(--orange-d)}
+.dish button{margin-top:auto;width:100%}
+/* ===== 底部購物車列 ===== */
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:3px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;z-index:10}
+.bar b{font-size:22px}
+/* ===== 購物車與確認 ===== */
+.box{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:16px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px 0;border-bottom:2px dashed var(--line)}
+.row:last-child{border-bottom:0}
+.row .nm{flex:1 1 180px;font-size:22px;font-weight:700}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{min-width:56px;padding:0}
+.qty output{min-width:40px;text-align:center;font-size:26px;font-weight:700}
+.sub{min-width:100px;text-align:right;font-size:22px;font-weight:700}
+.total{font-size:30px;font-weight:700;text-align:right;margin:14px 0;color:var(--orange-d)}
+.acts{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;margin-top:12px}
+.acts button{flex:1 1 200px}
+.tip{background:var(--green);border-left:8px solid var(--green-d);padding:12px 16px;border-radius:10px;margin:12px 0}
+.empty{text-align:center;padding:30px 0;font-size:22px}
+/* ===== 成功頁 ===== */
+.ok{text-align:center;padding:30px 12px}
+.ok .big{font-size:90px}
+.ok h1{font-size:38px}
+.num{display:inline-block;background:var(--green);border:3px solid var(--green-d);border-radius:16px;padding:10px 28px;font-size:34px;font-weight:700;margin:12px 0}
+/* ===== 提示訊息 ===== */
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#3a2f27;color:#fff;padding:14px 24px;border-radius:14px;font-size:20px;z-index:20;display:none;max-width:92%;text-align:center}
+@media(max-width:600px){.welcome h1{font-size:36px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="toast" role="status"></div>
+<div class="wrap">
+
+<!-- 畫面一：歡迎 -->
+<section id="s-welcome" class="screen on">
+  <div class="welcome">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="55" r="34" fill="#fffdf8" stroke="#c8693a" stroke-width="4"/><circle cx="50" cy="55" r="22" fill="#dfe9d6" stroke="#4f6b45" stroke-width="2"/><path d="M14 12 L30 40 M24 10 L36 36" stroke="#a3502a" stroke-width="4" stroke-linecap="round"/><path d="M84 10 L66 42" stroke="#a3502a" stroke-width="4" stroke-linecap="round"/></svg>
+    <h1>幸福食堂</h1>
+    <p><b>歡迎光臨！今天想吃點什麼？</b></p>
+    <p>請按下方按鈕，開始練習手機點餐。</p>
+    <button onclick="go('menu')">開始點餐</button>
+  </div>
+</section>
+
+<!-- 畫面二～四共用的進度提示 -->
+<div id="steps" class="steps" style="display:none"></div>
+
+<!-- 畫面二：菜單 -->
+<section id="s-menu" class="screen">
+  <div class="tabs" id="tabs"></div>
+  <div class="grid" id="grid"></div>
+</section>
+
+<!-- 畫面三：購物車 -->
+<section id="s-cart" class="screen">
+  <h2>🛒 我的購物車</h2>
+  <div class="box" id="cartBox"></div>
+</section>
+
+<!-- 畫面四：確認訂單 -->
+<section id="s-confirm" class="screen">
+  <h2>📋 請核對您的訂單</h2>
+  <div class="box" id="confirmBox"></div>
+</section>
+
+<!-- 畫面五：成功 -->
+<section id="s-done" class="screen">
+  <div class="ok">
+    <div class="big">🎉</div>
+    <h1>點餐成功！</h1>
+    <p>您的餐點已送出，請稍候。</p>
+    <div class="num" id="orderNo"></div>
+    <p>這是練習用的模擬訂單，不會真的送餐，也不會收費。</p>
+    <button onclick="restart()">再練習一次</button>
+  </div>
+</section>
+</div>
+
+<!-- 底部購物車列（只在菜單頁顯示） -->
+<div class="bar" id="bar" style="display:none">
+  <b id="barInfo"></b>
+  <button onclick="go('cart')">查看購物車</button>
+</div>
+
+<script>
+/* ===== 餐點資料：id 同時是圖片檔名（images/id.jpg） ===== */
+var MENU = {
+  "主食":[
+    {id:"chicken-rice",name:"香煎雞腿飯",price:120,e:"🍗",c:"#ecd3b4"},
+    {id:"lu-rou-fan",name:"滷肉飯",price:70,e:"🍚",c:"#e6cfc0"},
+    {id:"beef-noodle",name:"牛肉麵",price:160,e:"🍜",c:"#ead9c2"},
+    {id:"salmon-fried-rice",name:"鮭魚炒飯",price:130,e:"🍣",c:"#f0d6c8"},
+    {id:"mushroom-chicken-rice",name:"香菇雞肉飯",price:110,e:"🍄",c:"#e3d6c3"}],
+  "湯品":[
+    {id:"radish-soup",name:"蘿蔔排骨湯",price:50,e:"🥣",c:"#e9e4d2"},
+    {id:"corn-soup",name:"玉米濃湯",price:40,e:"🌽",c:"#f2e3b0"},
+    {id:"clam-soup",name:"蛤蜊薑絲湯",price:55,e:"🐚",c:"#dfe6d4"}],
+  "飲料":[
+    {id:"bubble-tea",name:"珍珠奶茶",price:60,e:"🧋",c:"#e4d2c0"},
+    {id:"green-tea",name:"無糖綠茶",price:35,e:"🍵",c:"#d5e2c8"},
+    {id:"winter-melon-lemon",name:"冬瓜檸檬",price:40,e:"🍋",c:"#f0e6b8"}],
+  "甜點":[
+    {id:"mango-pudding",name:"芒果布丁",price:45,e:"🥭",c:"#f5dca0"},
+    {id:"sesame-tangyuan",name:"芝麻湯圓",price:50,e:"🍡",c:"#d9d0c4"},
+    {id:"red-bean-purple-rice",name:"紅豆紫米粥",price:55,e:"🥄",c:"#dccbd3"},
+    {id:"tofu-pudding",name:"原味豆花",price:45,e:"🍮",c:"#f1ead8"}]
+};
+var cart = {};          // 購物車：{餐點id: 數量}
+var cat = "主食";       // 目前分類
+var ALL = {};           // 以 id 快速查餐點
+for (var k in MENU) MENU[k].forEach(function(d){ ALL[d.id]=d; });
+
+/* ===== 小工具 ===== */
+function $(id){ return document.getElementById(id); }
+function toast(msg){ var t=$("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t.h); t.h=setTimeout(function(){t.style.display="none";},2500); }
+function count(){ var n=0; for(var i in cart) n+=cart[i]; return n; }
+function sum(){ var s=0; for(var i in cart) s+=cart[i]*ALL[i].price; return s; }
+
+/* ===== 切換畫面與進度提示 ===== */
+function go(name){
+  document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("on"); });
+  $("s-"+name).classList.add("on");
+  var idx={menu:0,cart:1,confirm:2,done:3}[name];
+  var st=$("steps");
+  if(idx===undefined || name==="done"){ st.style.display="none"; }
+  else{
+    st.style.display="flex";
+    st.innerHTML=["① 選餐","② 購物車","③ 確認訂單","④ 點餐成功"].map(function(t,i){ return '<span class="'+(i===idx?"now":"")+'">'+t+'</span>'; }).join("");
+  }
+  if(name==="menu") renderMenu();
+  if(name==="cart") renderCart();
+  if(name==="confirm") renderConfirm();
+  $("bar").style.display = (name==="menu") ? "flex" : "none";
+  updateBar();
+  window.scrollTo(0,0);
+}
+
+/* ===== 菜單 ===== */
+function renderMenu(){
+  $("tabs").innerHTML = Object.keys(MENU).map(function(c){
+    return '<button class="'+(c===cat?"on":"")+'" onclick="setCat(\''+c+'\')">'+c+'</button>';
+  }).join("");
+  $("grid").innerHTML = MENU[cat].map(function(d){
+    // 圖片放在 images 資料夾；找不到時 onerror 會移除 img，露出下方的備用圖示
+    return '<article class="dish"><div class="pic"><div class="fb" style="background:'+d.c+'" aria-hidden="true">'+d.e+'</div>'+
+      '<img src="images/'+d.id+'.jpg" alt="'+d.name+'" onerror="this.remove()"></div>'+
+      '<div class="info"><h2>'+d.name+'</h2><div class="price">NT$'+d.price+'</div>'+
+      '<button onclick="add(\''+d.id+'\')">加入購物車</button></div></article>';
+  }).join("");
+}
+function setCat(c){ cat=c; renderMenu(); }
+function add(id){ cart[id]=(cart[id]||0)+1; toast("已加入：" + ALL[id].name + "（共 " + cart[id] + " 份）"); updateBar(); }
+function updateBar(){ $("barInfo").textContent = "共 "+count()+" 份，NT$"+sum(); }
+
+/* ===== 購物車 ===== */
+function renderCart(){
+  var ids=Object.keys(cart);
+  if(!ids.length){
+    $("cartBox").innerHTML='<div class="empty">購物車還是空的喔！<br>請先回到菜單選擇餐點。</div><div class="acts"><button onclick="go(\'menu\')">回到菜單</button></div>';
+    return;
+  }
+  $("cartBox").innerHTML = ids.map(function(i){
+    var d=ALL[i];
+    return '<div class="row"><div class="nm">'+d.name+'<br><small>NT$'+d.price+' / 份</small></div>'+
+      '<div class="qty"><button class="ghost" aria-label="減少一份'+d.name+'" onclick="chg(\''+i+'\',-1)">－</button><output>'+cart[i]+'</output><button class="ghost" aria-label="增加一份'+d.name+'" onclick="chg(\''+i+'\',1)">＋</button></div>'+
+      '<div class="sub">NT$'+cart[i]*d.price+'</div>'+
+      '<button class="ghost" onclick="del(\''+i+'\')">刪除</button></div>';
+  }).join("") +
+  '<div class="total">合計：NT$'+sum()+'</div>'+
+  '<div class="acts"><button class="ghost" onclick="go(\'menu\')">繼續選餐</button><button onclick="go(\'confirm\')">下一步：確認訂單</button></div>';
+}
+function chg(id,n){ cart[id]+=n; if(cart[id]<=0){ delete cart[id]; toast("已移除："+ALL[id].name); } renderCart(); }
+function del(id){ delete cart[id]; toast("已刪除："+ALL[id].name); renderCart(); }
+
+/* ===== 確認訂單 ===== */
+function renderConfirm(){
+  if(!count()){ go("cart"); toast("購物車是空的，請先選擇餐點。"); return; }
+  $("confirmBox").innerHTML = Object.keys(cart).map(function(i){
+    var d=ALL[i];
+    return '<div class="row"><div class="nm">'+d.name+'</div><div>NT$'+d.price+' × '+cart[i]+' 份</div><div class="sub">NT$'+cart[i]*d.price+'</div></div>';
+  }).join("") +
+  '<div class="total">總金額：NT$'+sum()+'</div>'+
+  '<div class="tip">請再看一次：餐點和份數都正確嗎？確認沒問題，再按「確認送出」。</div>'+
+  '<div class="acts"><button class="ghost" onclick="go(\'cart\')">回去修改</button><button onclick="submitOrder()">確認送出</button></div>';
+}
+function submitOrder(){
+  $("orderNo").textContent = "取餐號碼：" + (Math.floor(Math.random()*90)+10);
+  go("done");
+}
+function restart(){ cart={}; cat="主食"; go("welcome"); }
+</script>
+</body>
+</html>
